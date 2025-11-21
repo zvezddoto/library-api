@@ -1,86 +1,39 @@
-import express from "express";
-import db from "./db.js";
+const express = require("express");
+const Database = require("better-sqlite3");
+const cors = require("cors");
 
 const app = express();
+app.use(cors());
 app.use(express.json());
 
-// Главная страница
-app.get("/", (req, res) => {
-  res.send("<h1>Library API працює!</h1><p>GET /books</p>");
-});
+const db = new Database("./library.db");
 
-// Получить все книги
+// GET all books
 app.get("/books", (req, res) => {
-  db.all("SELECT * FROM books", [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
-  });
+  const books = db.prepare("SELECT * FROM books").all();
+  res.json(books);
 });
 
-// Добавить книгу
+// GET book by ID
+app.get("/books/:id", (req, res) => {
+  const book = db.prepare("SELECT * FROM books WHERE id = ?").get(req.params.id);
+  if (!book) return res.status(404).json({ error: "Not found" });
+  res.json(book);
+});
+
+// POST new book
 app.post("/books", (req, res) => {
-  const { title, author } = req.body;
-  db.run(
-    "INSERT INTO books (title, author) VALUES (?, ?)",
-    [title, author],
-    function (err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ id: this.lastID, title, author });
-    }
-  );
+  const insert = db.prepare("INSERT INTO books (title, author) VALUES (?, ?)");
+  const result = insert.run(req.body.title, req.body.author);
+  res.json({ id: result.lastInsertRowid });
 });
 
-// Удалить книгу
+// DELETE book
 app.delete("/books/:id", (req, res) => {
-  const { id } = req.params;
-
-  db.run("DELETE FROM books WHERE id = ?", [id], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
-
-    if (this.changes === 0) {
-      return res.status(404).json({ message: "Book not found" });
-    }
-
-    res.json({ message: "Book deleted" });
-  });
+  const del = db.prepare("DELETE FROM books WHERE id = ?");
+  del.run(req.params.id);
+  res.json({ message: "Book deleted" });
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server running on port " + PORT));
-
-app.put("/books/:id", (req, res) => {
-  const { id } = req.params;
-  const { title, author } = req.body;
-
-  db.run(
-    "UPDATE books SET title = ?, author = ? WHERE id = ?",
-    [title, author, id],
-    function (err) {
-      if (err) return res.status(500).json({ error: err.message });
-
-      if (this.changes === 0) {
-        return res.status(404).json({ error: "Book not found" });
-      }
-
-      res.json({ id, title, author });
-    }
-  );
-});
-
-app.delete("/books/:id", (req, res) => {
-  const { id } = req.params;
-
-  db.run(
-    "DELETE FROM books WHERE id = ?",
-    [id],
-    function (err) {
-      if (err) return res.status(500).json({ error: err.message });
-
-      if (this.changes === 0) {
-        return res.status(404).json({ error: "Book not found" });
-      }
-
-      res.json({ message: "Book deleted", id });
-    }
-  );
-});
+const port = process.env.PORT || 10000;
+app.listen(port, () => console.log("Server running on port " + port));
